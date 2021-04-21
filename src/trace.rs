@@ -1,4 +1,4 @@
-//A module that will handle traces for our library.
+//! Trace objects that represent a run of a generative model.
 use std::{collections::HashMap, ops::Index};
 
 use probability::distribution::Sample;
@@ -6,7 +6,7 @@ use rand::{FromEntropy, rngs::StdRng};
 
 use super::distributions::{self, Value};
 
-//A choicemap struct that will be a part of the trace. 
+/// A struct to hold all of the random choices made during the execution of a generative model. 
 #[derive(Clone, Debug)]
 pub struct Choicemap{
     values : HashMap<String, Value>
@@ -14,29 +14,43 @@ pub struct Choicemap{
 
 //Implement standard functions for choice maps. 
 impl Choicemap {
-    //Create a new, blank choice map. 
+    /// Create a new, blank choice map. 
+    /// # Example
+    /// ```
+    /// let mut choicemap = Choicemap::new(); 
+    /// choicemap.add_choice("p", Value::Real(0.5)); 
+    /// ```
     pub fn new() -> Choicemap {
         Choicemap{ values : HashMap::new() }
     }
 
-    //Create a new choicemap with known choices in it. 
+    /// Create a new choicemap with given choices in it. 
+    /// # Example 
+    /// ```
+    /// let mut choicemap = Choicemap::from(vec![("p", Value::Real(0.5))]); 
+    /// ```
     pub fn from(choices : Vec<(&str, Value)>) -> Choicemap {
         let mut res = Choicemap::new(); 
         choices.iter().for_each(|(s, v)| res.add_choice(*s, *v)); 
         res
     }
 
-    //Add a choice to this choicemap. 
+    /// Add a choice to this choicemap. 
+    /// # Example
+    /// ```
+    /// let mut choicemap = Choicemap::new(); 
+    /// choicemap.add_choice("p", Value::Real(0.5)); 
+    /// ```
     pub fn add_choice(&mut self, identifier : &str, value : Value) {
         self.values.insert(identifier.to_string(), value); 
     }
 
-    //Get a list of the choices that we made. 
+    /// Get a list of the choices that were made in the generative model. 
     pub fn get_choices(&self) -> Vec<(&str, Value)> {
         self.values.keys().map(|k| (k.as_str(), self.values.get(k).unwrap().clone())).collect() 
     }
 
-    //Return whether or not we have a given key in it. 
+    /// Check whether or not the given key is already in the choicemap. 
     pub fn contains_key(&self, key : &str) -> bool {
         self.values.contains_key(key)
     }
@@ -64,26 +78,47 @@ impl Index<&String> for Choicemap {
     }
 }
 
-//The trace struct. 
+/**
+The trace struct. This holds information about the execution of a gnerative model. 
+*/
 #[derive(Debug, Clone)]
 pub struct Trace {
+    /// The log joint liklihood of all of the random decisions in the trace. 
     pub log_score : f64, 
+    /// The Choicemap that holds the list of the actuial decisions that were made in the execution of the generative model.
     pub choices : Choicemap
 }
 
 
 impl Trace {
-    //Create a new blank trace. 
+    /**
+    Create a new blank trace. It begins with an empty choice map and a log score of 0 (which corresponds to a 
+    probability of 1.0 when exponentiated.)
+    */
     pub fn new() -> Trace {
         Trace{ log_score : 0.0, choices : Choicemap::new() }
     }
 
-    //Update the logscore of a trace by adding the given value.  
-    pub fn update_logscore(&mut self, new_value : f64) {
+    /**
+    Update the logscore of a given trace. 
+    */
+    pub(crate) fn update_logscore(&mut self, new_value : f64) {
         self.log_score = self.log_score + new_value; 
     }
 
-    //A function to return the trace as a string. 
+    /**
+    Return a string that discribes the random decisions made by the model in this trace.
+    # Example 
+    ```
+    #[r_gen]
+    fn my_biased_coin_model(():()){
+        sample!(p ~ Distribution::Beta(1.0, 1.0));                    //Sample p from a uniform. 
+        sample!(num_heads ~ Distribution::Binomial(100, p.into()));   //Flip 100 coins where P(Heads)=p
+    }
+    let (trace, result) = generate(&mut my_biased_coin_model, ()); 
+    println!("{}", trace.get_trace_string()); 
+    ```
+    */
     pub fn get_trace_string(&self) -> String {
         let mut s = String::new(); 
         for (key, value) in &self.choices.get_choices() {
@@ -92,7 +127,11 @@ impl Trace {
         s
     }
 
-    //Sample from a vec renormalized by the weight of traces. 
+    /**
+    Sample a trace from a vector of traces according to a categorical distribution. The weights for the distribution are 
+    the scores of the traces rescaled by a normalizing constant. This function is intended to be used in an importance
+    resampling algorithm.
+    */
     pub fn sample_weighted_traces(traces : &Vec<Trace>) -> Option<Trace> {
         if traces.len() == 0 {
             None

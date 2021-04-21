@@ -1,4 +1,4 @@
-//A module that will handle the distributions for the library. 
+//! Distributions a generative model can sample from. 
 
 use std::{fmt, ops::{Add, Div, Mul, Sub}};
 
@@ -9,11 +9,16 @@ use rand::distributions::Distribution as Distr;
 
 
 
-//A value struct that will handle possible values from the distributions. 
+/**
+A value struct that will handle possible values from the distributions.
+*/ 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Value {
+    /// Represents a boolean. 
     Boolean(bool), 
+    /// Represents an integer. 
     Integer(i64), 
+    /// Represents a real number. 
     Real(f64)
 }
 
@@ -175,17 +180,25 @@ impl Div<Value> for Value {
 
 
 
-//The distributions we can use. 
+/// Enum that uniquely discribes a given distribution. 
 #[derive(Debug)]
 pub enum Distribution {
-    Bernoulli(f64), 
-    Binomial(i64, f64), 
-    Normal(f64, f64), 
-    Gamma(f64, f64), 
-    Beta(f64, f64)
+    /// A Bernoulli distribution with paramater p.
+    Bernoulli(f64),     
+    /// A Binomial distribution with paramaters n and p.    
+    Binomial(i64, f64),     
+    /// A Normal distribution with paramaters mu and sigma.
+    Normal(f64, f64),       
+    /// A Gamma distribution with parameters alpha and beta.
+    Gamma(f64, f64),        
+    /// A Beta distribution with parameters alpha and beta.
+    Beta(f64, f64),         
+    /// A Lognormal distribution with paramaters mu and sigma.
+    LogNormal(f64, f64),    
 }
 
-pub struct Source<T>(pub T);
+/// A struct that holds a source of randomness for the various distributions.
+pub(crate) struct Source<T>(pub T);
 
 impl<T: rand::RngCore> source::Source for Source<T> {
     fn read_u64(&mut self) -> u64 {
@@ -194,7 +207,7 @@ impl<T: rand::RngCore> source::Source for Source<T> {
 }
 
 impl Distribution {
-    //Sample from the distribution. 
+    /// Sample from the distribution and return the value sampled. 
     pub fn sample(&self) -> Value {
         match self {
             Distribution::Bernoulli(p) => {
@@ -217,11 +230,21 @@ impl Distribution {
             Distribution::Beta(alpha, beta) => {
                 let b = probability::distribution::Beta::new(*alpha, *beta, 0.0, 1.0);
                 Value::Real(b.sample(&mut Source(StdRng::from_entropy()))) 
+            }, 
+            Distribution::LogNormal(mu, sigma) => {
+                let n = probability::distribution::Lognormal::new(*mu, *sigma); 
+                Value::Real(n.sample(&mut Source(StdRng::from_entropy())))
             }
         }
     }
 
-    //Compute the liklihood of a value given a distribution. 
+    /**
+    Compute the liklihood of a value given a distribution (returns the log liklihood.) 
+    # Errors 
+    This function will return an Err if you try to determine the liklihood of a variant of the ```Value``` enum that 
+    the distribution does not produce. For example, trying to get the liklihood of a real number from a bernoulli 
+    distribution will return an Err.
+    */
     pub fn liklihood(&self, value : &Value) -> Result<f64, &str> {
         match self {
             Distribution::Bernoulli(p) => {
@@ -269,6 +292,15 @@ impl Distribution {
                         Ok(b.density(*n).ln())
                     }, 
                     _ => Err("Value of wrong type, expected Real.")
+                }
+            }, 
+            Distribution::LogNormal(mu, sigma) => {
+                match value {
+                    Value::Real(n) => {
+                        let l = probability::distribution::Lognormal::new(*mu, *sigma); 
+                        Ok(l.density(*n).ln())
+                    }, 
+                    _ => Err("Value of wron type, expected Real.")
                 }
             }
         }
