@@ -29,18 +29,11 @@ macro_rules! sample {
 
 #[cfg(test)]
 mod tests { 
-   
-
-    #[test]
-    fn test_macro() {
-        assert_eq!(2+2, 4);
-    }
-
-    use std::collections::HashMap;
     use std::rc::Rc;
-    use crate::r_gen::{Trace, Value};
-    use crate::r_gen::distributions::Distribution; 
+
+    use crate::r_gen::{trace::{Trace, Choicemap}, distributions::{Distribution, Value}};
     use crate::r_gen::{simulate, generate}; 
+
     #[test]
     fn test_simulate(){
         fn flip_biased_coin(mut sample : Rc<dyn FnMut(&String, Distribution, &mut Trace) -> Value>, trace : &mut Trace, p : f64) {
@@ -65,8 +58,8 @@ mod tests {
             sample!(heads ~ Distribution::Binomial(n, p)); 
             println!("Result of flips: {:?}", heads)
         }
-        let mut constraints = HashMap::new(); 
-        constraints.insert(String::from("heads"), Value::Integer(4)); 
+        let mut constraints = Choicemap::new(); 
+        constraints.add_choice("heads", Value::Integer(4)); 
         let (trace, _) : (Trace, _)= generate(&mut flip_multiple_biased_coins, (5, 0.7), &constraints); 
         println!("Trace from generate: {:?}", trace);
     }
@@ -189,9 +182,8 @@ mod tests {
         }
 
         //Run the model once in the forward direction and record the observations. 
-        let (mut t, _) : (Trace, _)= simulate(&mut my_model, ());
-        let mut choices = HashMap::new();
-        choices.insert(String::from("num_heads"), *t.get_from_choices_str("num_heads").unwrap()); 
+        let (t, _) : (Trace, _)= simulate(&mut my_model, ());
+        let choices = Choicemap::from(vec![("num_heads", t.choices["num_heads"])]);
 
         //Perform importance resampling to get an estimate for the value of p. 
         let mut traces = Vec::new();
@@ -200,285 +192,33 @@ mod tests {
             traces.push(gt); 
         }
         
-        println!("Actuial value for p:\t {:?}", t.get_from_choices_str("p").unwrap()); 
-        println!("Generated value for p:\t {:?}", Trace::sample_weighted_traces(&traces).unwrap().get_from_choices_str("p").unwrap());
+        println!("Actual value for p:\t {}", t.choices["p"]); 
+        println!("Generated value for p:\t {}", Trace::sample_weighted_traces(&traces).unwrap().choices["p"]); 
     }
 
 }
 
 #[allow(dead_code)]
 pub mod r_gen {
+
     use std::rc::Rc;
-    use std::collections::HashMap; 
-    use std::fmt; 
-    use probability::{distribution::Sample, source::Source};
-    use rand::{FromEntropy, rngs::{StdRng, ThreadRng}};
 
-    //A value for the probability distribution.
-    #[derive(Debug, Clone, Copy, PartialEq)]
-    pub enum Value {
-        Boolean(bool), 
-        Integer(i64), 
-        Real(f64)
-    }
+    use self::{distributions::{Distribution, Value}, trace::{Choicemap, Trace}};
 
-    impl fmt::Display for Value {
-        fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-            match self {
-                Value::Boolean(b) => {
-                    write!(formatter, "{}", b)
-                }, 
-                Value::Integer(i) => {
-                    write!(formatter, "{}", i)
-                }, 
-                Value::Real(r) => {
-                    write!(formatter, "{}", r)
-                },
-            }
-            // write!(formatter, "Foo")
-        }
-    }
-
-    //Implement type conversions
-    impl Into<f64> for Value {
-        fn into(self) -> f64 { 
-            match self {
-                Value::Real(v) => v, 
-                _ => panic!("Tried to convert non Real value into a f64.")
-            }
-        }
-    }
-    impl Into<Value> for f64 {
-        fn into(self) -> Value { 
-            Value::Real(self)
-        }
-    }
-
-    impl Into<i64> for Value {
-        fn into(self) -> i64 { 
-            match self {
-                Value::Integer(v) => v, 
-                _ => panic!("Tried to convert non Integer value into an i64.")
-            }
-        }
-    }
-    impl Into<Value> for i64 {
-        fn into(self) -> Value { 
-            Value::Integer(self)
-        }
-    }
-
-    impl Into<bool> for Value {
-        fn into(self) -> bool { 
-            match self {
-                Value::Boolean(v) => v, 
-                _ => panic!("Tried to convert non Boolean value into a bool.")
-            }
-        }
-    }
-    impl Into<Value> for bool {
-        fn into(self) -> Value { 
-            Value::Boolean(self)
-        }
-    }
-
-    //A macro that will handle the distributions for the library. 
-    pub mod distributions {
-        use probability::prelude::*;
-        use rand::{self, FromEntropy, prelude::ThreadRng, rngs::StdRng}; 
-        use rand::distributions::Distribution as Distr;
-        use super::Value; 
-        
-        
-        //The distributions we can use. 
-        #[derive(Debug)]
-        pub enum Distribution {
-            Bernoulli(f64), 
-            Binomial(i64, f64), 
-            Normal(f64, f64), 
-            Gamma(f64, f64), 
-            Beta(f64, f64)
-        }
-        pub struct Source<T>(pub T);
-
-        impl<T: rand::RngCore> source::Source for Source<T> {
-            fn read_u64(&mut self) -> u64 {
-                self.0.next_u64()
-            }
-        }
-
-        impl Distribution {
-            //Sample from the distribution. 
-            pub fn sample(&self) -> Value {
-                match self {
-                    Distribution::Bernoulli(p) => {
-                        let d = rand::distributions::Bernoulli::new(*p);
-                        let v = d.sample(&mut ThreadRng::default());
-                        Value::Boolean(v)
-                    }, 
-                    Distribution::Binomial(n, p) => {
-                        let b = probability::distribution::Binomial::new(*n as usize, *p); 
-                        Value::Integer(b.sample(&mut Source(StdRng::from_entropy())) as i64)
-                    }, 
-                    Distribution::Normal(mu, sigma_squared) => {
-                        let n = probability::distribution::Gaussian::new(*mu, *sigma_squared); 
-                        Value::Real(n.sample(&mut Source(StdRng::from_entropy())))
-                    }, 
-                    Distribution::Gamma(alpha, beta) => {
-                        let g = probability::distribution::Gamma::new(*alpha, *beta); 
-                        Value::Real(g.sample(&mut Source(StdRng::from_entropy())))
-                    }, 
-                    Distribution::Beta(alpha, beta) => {
-                        let b = probability::distribution::Beta::new(*alpha, *beta, 0.0, 1.0);
-                        Value::Real(b.sample(&mut Source(StdRng::from_entropy()))) 
-                    }
-                }
-            }
-
-            //Compute the liklihood of a value given a distribution. 
-            pub fn liklihood(&self, value : &Value) -> Result<f64, &str> {
-                match self {
-                    Distribution::Bernoulli(p) => {
-                        match value {
-                            Value::Boolean(b) => {
-                                match b {
-                                    true  => Ok(p.ln()), 
-                                    false => Ok((1.0 - p).ln()), 
-                                }
-                            }, 
-                            _ => Err("Value of wrong type, expected Boolean.")
-                        }
-                    }, 
-                    Distribution::Binomial(n, p) => {
-                        match value {
-                            Value::Integer(k) => {
-                                let norm = probability::distribution::Binomial::new(*n as usize, *p);
-                                Ok(norm.mass(*k as usize).ln())
-                            }, 
-                            _ => Err("Value of wrong type, expected Integer.")
-                        }
-                    }, 
-                    Distribution::Normal(mu, sigma_squared) => {
-                        match value {
-                            Value::Real(n) => {
-                                let norm = probability::distribution::Gaussian::new(*mu, *sigma_squared); 
-                                Ok(norm.density(*n).ln())
-                            }, 
-                            _ => Err("Value of wrong type, expected Real.")
-                        }
-                    },
-                    Distribution::Gamma(alpha, beta) => {
-                        match value {
-                            Value::Real(n) => {
-                                let g = probability::distribution::Gaussian::new(*alpha, *beta); 
-                                Ok(g.density(*n).ln())
-                            }, 
-                            _ => Err("Value of wrong type, expected Real.")
-                        }
-                    }, 
-                    Distribution::Beta(alpha, beta) => {
-                        match value {
-                            Value::Real(n) => {
-                                let b = probability::distribution::Beta::new(*alpha, *beta, 0.0, 1.0);
-                                Ok(b.density(*n).ln())
-                            }, 
-                            _ => Err("Value of wrong type, expected Real.")
-                        }
-                    }
-                }
-            }
-
-
-        }
-    }
-
-
-    //The trace struct. 
-    #[derive(Debug, Clone)]
-    pub struct Trace {
-        log_score : f64, 
-        choices : HashMap<String, Value>
-    }
-
-
-    impl Trace {
-        //Create a new blank trace. 
-        pub fn new() -> Trace {
-            Trace{ log_score : 0.0, choices : HashMap::new() }
-        }
-
-        //Update the logscore of a trace by adding the given value.  
-        fn update_logscore(&mut self, new_value : f64) {
-            self.log_score = self.log_score + new_value; 
-        }
-
-        //Add a choice to the choicemap. 
-        fn add_to_choices(&mut self, name : String, value : Value) {
-            // self.choices.insert(&(name.clone()), value);
-            self.choices.insert(name, value); 
-        }
-
-        //Get a value from the choicemap. 
-        pub fn get_from_choices(&mut self, name : &String) -> Option<&Value> {
-            self.choices.get(name)
-        }
-        pub fn get_from_choices_str(&mut self, name : &str) -> Option<&Value> {
-            self.choices.get(&String::from(name))
-        }
-
-        //A function to return the trace as a string. 
-        pub fn get_trace_string(&self) -> String {
-            let mut s = String::new(); 
-            for (key, value) in &self.choices {
-                s.push_str(&format!("{} => {}", key, value));
-            }
-            s
-        }
-
-        //Sample from a vec renormalized by the weight of traces. 
-        pub fn sample_weighted_traces(traces : &Vec<Trace>) -> Option<Trace> {
-            if traces.len() == 0 {
-                None
-            } else {
-                let values : Vec<f64> = traces.iter().map(|x| x.log_score.exp()).collect();
-                let sum : f64 = values.iter().map(|x| x).sum(); 
-                let normalized_values : Vec<f64> = values.iter().map(|x| x / sum).collect(); 
-                let categorical = probability::distribution::Categorical::new(&normalized_values[..]); 
-                
-                Some(traces[categorical.sample(&mut distributions::Source(StdRng::from_entropy()))].clone())
-            }
-        }
-    }
-
-    //Implement equivelance for traces based on the log_score. 
-    impl PartialEq for Trace {
-        fn eq(&self, other: &Trace) -> bool { 
-            self.log_score == other.log_score
-         }
-    }
-    impl PartialOrd for Trace {
-        fn partial_cmp(&self, other: &Trace) -> std::option::Option<std::cmp::Ordering> { 
-            if self.log_score > other.log_score {
-                Some(std::cmp::Ordering::Greater)
-            } else if self.log_score < other.log_score {
-                Some(std::cmp::Ordering::Less)
-            } else {
-                Some(std::cmp::Ordering::Equal)
-            }
-        }
-    }
+    //Re-export the other sub modules. 
+    pub mod distributions; 
+    pub mod trace; 
 
     //The function that we will use to generate a trace from a function.
-    use distributions::Distribution; 
     pub(crate) fn simulate<F, A, R>(generative_function : &mut F, arguments : A) -> (Trace, R) 
     where 
     F : FnMut(Rc<dyn FnMut(&String, Distribution, &mut Trace) -> Value>, &mut Trace, A) -> R, 
     {
         let sample = |name : &String, dist : Distribution, trace : &mut Trace| {
-            let value = dist.sample();                      //Sample a value. 
-            let prob = dist.liklihood(&value).unwrap();     //Compute the probability of this value. 
-            trace.update_logscore(prob);                    //Update the log score with the pdf. 
-            trace.add_to_choices(name.clone(), value);      //Add the choice to the hashmap.
+            let value = dist.sample();                              //Sample a value. 
+            let prob = dist.liklihood(&value).unwrap();               //Compute the probability of this value. 
+            trace.update_logscore(prob);                         //Update the log score with the pdf. 
+            trace.choices.add_choice(&name, value);             //Add the choice to the hashmap.
             value 
         }; 
         let mut trace = Trace::new(); 
@@ -487,25 +227,25 @@ pub mod r_gen {
     }
 
     //The function that we will use to generate a trace with importance sampling.
-    pub(crate) fn generate<F, A, R>(generative_function : &mut F, arguments : A, conditions : &HashMap<String, Value>) -> (Trace, R) 
+    pub(crate) fn generate<F, A, R>(generative_function : &mut F, arguments : A, conditions : &Choicemap) -> (Trace, R) 
     where 
     F : FnMut(Rc<dyn FnMut(&String, Distribution, &mut Trace) -> Value>, &mut Trace, A) -> R, 
     {   
         let sample = |name : &String, dist : Distribution, trace : &mut Trace| {
             let mut _value = Value::Real(0.0); 
             _value = if trace.choices.contains_key(name) {
-                trace.choices.get(name).unwrap().clone()
+                trace.choices[name.as_str()].clone()
             } else {
                 dist.sample()
             };
-            let prob = dist.liklihood(&_value).unwrap();    //Compute the probability of this value. 
-            trace.update_logscore(prob);                    //Update the log score with the pdf. 
-            trace.add_to_choices(name.clone(), _value);     //Add the choice to the hashmap.
+            let prob = dist.liklihood(&_value).unwrap();            //Compute the probability of this value. 
+            trace.update_logscore(prob);                       //Update the log score with the pdf. 
+            trace.choices.add_choice(name.as_str(), _value);  //Add the choice to the hashmap.
             _value 
         };
         let mut trace = Trace::new(); 
-        for k in conditions.keys() {
-            trace.add_to_choices(k.clone(), *conditions.get(k).unwrap()); 
+        for (k, v) in conditions.get_choices() {
+            trace.choices.add_choice(k, v); 
         }
         let return_value = generative_function(Rc::new(sample), &mut trace, arguments);
         (trace, return_value)
