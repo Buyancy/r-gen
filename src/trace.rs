@@ -17,6 +17,8 @@ impl Choicemap {
     /// Create a new, blank choice map. 
     /// # Example
     /// ```
+    /// use r_gen::trace::Choicemap; 
+    /// use r_gen::distributions::Value; 
     /// let mut choicemap = Choicemap::new(); 
     /// choicemap.add_choice("p", Value::Real(0.5)); 
     /// ```
@@ -27,6 +29,8 @@ impl Choicemap {
     /// Create a new choicemap with given choices in it. 
     /// # Example 
     /// ```
+    /// use r_gen::trace::Choicemap; 
+    /// use r_gen::distributions::Value; 
     /// let mut choicemap = Choicemap::from(vec![("p", Value::Real(0.5))]); 
     /// ```
     pub fn from(choices : Vec<(&str, Value)>) -> Choicemap {
@@ -38,6 +42,8 @@ impl Choicemap {
     /// Add a choice to this choicemap. 
     /// # Example
     /// ```
+    /// use r_gen::trace::Choicemap; 
+    /// use r_gen::distributions::Value; 
     /// let mut choicemap = Choicemap::new(); 
     /// choicemap.add_choice("p", Value::Real(0.5)); 
     /// ```
@@ -110,12 +116,17 @@ impl Trace {
     Return a string that discribes the random decisions made by the model in this trace.
     # Example 
     ```
+    #[macro_use]
+    use r_gen::{sample, r_gen}; 
+    use r_gen::{simulate, distributions::{Value, Distribution}, trace::{Choicemap, Trace}}; 
+    use std::rc::Rc;
+
     #[r_gen]
     fn my_biased_coin_model(():()){
         sample!(p ~ Distribution::Beta(1.0, 1.0));                    //Sample p from a uniform. 
         sample!(num_heads ~ Distribution::Binomial(100, p.into()));   //Flip 100 coins where P(Heads)=p
     }
-    let (trace, result) = generate(&mut my_biased_coin_model, ()); 
+    let (trace, result) = simulate(&mut my_biased_coin_model, ()); 
     println!("{}", trace.get_trace_string()); 
     ```
     */

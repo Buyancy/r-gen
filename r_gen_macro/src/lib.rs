@@ -10,9 +10,6 @@ use itertools::izip;
 //The macro to convert the function signature. 
 #[proc_macro_attribute]
 pub fn r_gen(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    //println!("attr: \"{:?}\"", attr);
-    //println!("item: \"{}\"", item);
-    //item
 
     let mut it = item.clone().into_iter();
     let mut out : Vec<TokenTree> = Vec::new();  
