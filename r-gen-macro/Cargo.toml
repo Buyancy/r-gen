@@ -3,7 +3,7 @@ name = "r-gen-macro"
 version = "0.0.1"
 authors = ["Sean Moore <49214378+Hobbs1024@users.noreply.github.com>"]
 edition = "2018"
-lisence = "MIT"
+license = "MIT"
 description = "A procedural macro to help with creating generative models in the r-gen crate."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
