@@ -15,7 +15,7 @@ fn main() {
 
     //Run the model once in the forward direction and record the observations. 
     let (t, _) : (Trace, _)= simulate(&mut my_model, ());
-    let choices = Choicemap::from(vec![("num_heads", t.choices["num_heads"])]);
+    let choices = Choicemap::from(vec![("num_heads", t.choices["num_heads"].clone())]);
 
     //Perform importance resampling to get an estimate for the value of p. 
     let mut traces = Vec::new();
@@ -46,7 +46,7 @@ pub use r_gen_macro::r_gen;
 extern crate r_gen_macro;
 
 /**
-The macro that is used for sampling froma distribution. 
+The macro that is used for sampling from a distribution. 
 # Example
 ```
 use r_gen::{sample, r_gen}; 
@@ -63,7 +63,7 @@ simulate(&mut my_model, ());
 Takes the form: identifier ~ Distribution. The identifier will have the value sampled from the distribution stored in
 it. It can be used later. p will have type ```Value```.
 # Example (Store results in an array)
-```
+```rust
 use r_gen::{sample, r_gen}; 
 use r_gen::{simulate, distributions::{Value, Distribution}, trace::{Choicemap, Trace}}; 
 use std::rc::Rc;
@@ -261,7 +261,7 @@ mod tests {
 
         //Run the model once in the forward direction and record the observations. 
         let (t, _) : (Trace, _)= simulate(&mut my_model, ());
-        let choices = Choicemap::from(vec![("num_heads", t.choices["num_heads"])]);
+        let choices = Choicemap::from(vec![("num_heads", t.choices["num_heads"].clone())]);
 
         //Perform importance resampling to get an estimate for the value of p. 
         let mut traces = Vec::new();
@@ -274,12 +274,24 @@ mod tests {
         println!("Generated value for p:\t {}", Trace::sample_weighted_traces(&traces).unwrap().choices["p"]); 
     }
 
+    #[test] 
+    fn test_trace_string(){
+        #[r_gen]
+        fn my_biased_coin_model(():()){
+            sample!(p ~ Distribution::Beta(1.0, 1.0));                    //Sample p from a uniform. 
+            sample!(num_heads ~ Distribution::Binomial(100, p.into()));   //Flip 100 coins where P(Heads)=p
+        }
+        println!("GO"); 
+        let (trace, result) = simulate(&mut my_biased_coin_model, ()); 
+        println!("Trace String: \n{}", trace.get_trace_string());
+    }
+
 }
 
 
 use std::rc::Rc;
 
-use self::{distributions::{Distribution, Value}, trace::{Choicemap, Trace}};
+use self::{distributions::{Value, Sampleable}, trace::{Choicemap, Trace}};
 
 //Re-export the other sub modules. 
 pub mod distributions; 
@@ -299,24 +311,27 @@ fn my_biased_coin_model(():()){
     sample!(p ~ Distribution::Beta(1.0, 1.0));                    //Sample p from a uniform. 
     sample!(num_heads ~ Distribution::Binomial(100, p.into()));   //Flip 100 coins where P(Heads)=p
 }
+println!("GO"); 
 let (trace, result) = simulate(&mut my_biased_coin_model, ()); 
 println!("Trace String: \n{}", trace.get_trace_string());
 ```
 Outputs: 
 ```shell
-
+Trace String: 
+num_heads => 37
+p => 0.38724904991570935
 ```
 */
-pub fn simulate<F, A, R>(generative_function : &mut F, arguments : A) -> (Trace, R) 
+pub fn simulate<F, A, R, S : Sampleable>(generative_function : &mut F, arguments : A) -> (Trace, R) 
 where 
-F : FnMut(Rc<dyn FnMut(&String, Distribution, &mut Trace) -> Value>, &mut Trace, A) -> R, 
+F : FnMut(Rc<dyn FnMut(&String, S, &mut Trace) -> Value>, &mut Trace, A) -> R, 
 {
-    let sample = |name : &String, dist : Distribution, trace : &mut Trace| {
+    let sample = |name : &String, dist : S, trace : &mut Trace| {
         let value = dist.sample();                              //Sample a value. 
         let prob = dist.liklihood(&value).unwrap();               //Compute the probability of this value. 
         trace.update_logscore(prob);                         //Update the log score with the pdf. 
-        trace.choices.add_choice(&name, value);             //Add the choice to the hashmap.
-        value 
+        trace.choices.add_choice(&name, value.clone());     //Add the choice to the hashmap.
+        value
     }; 
     let mut trace = Trace::new(); 
     let return_value = generative_function(Rc::new(sample), &mut trace, arguments); 
@@ -341,20 +356,20 @@ let choices = Choicemap::from(vec![("p", Value::Real(0.1))]);     //Fix the valu
 let (trace, result) = generate(&mut my_biased_coin_model, (), &choices); 
 ```
 */
-pub fn generate<F, A, R>(generative_function : &mut F, arguments : A, conditions : &Choicemap) -> (Trace, R) 
+pub fn generate<F, A, R, S: Sampleable>(generative_function : &mut F, arguments : A, conditions : &Choicemap) -> (Trace, R) 
 where 
-F : FnMut(Rc<dyn FnMut(&String, Distribution, &mut Trace) -> Value>, &mut Trace, A) -> R, 
+F : FnMut(Rc<dyn FnMut(&String, S, &mut Trace) -> Value>, &mut Trace, A) -> R, 
 {   
-    let sample = |name : &String, dist : Distribution, trace : &mut Trace| {
+    let sample = |name : &String, dist : S, trace : &mut Trace| {
         let mut _value = Value::Real(0.0); 
         _value = if trace.choices.contains_key(name) {
             trace.choices[name.as_str()].clone()
         } else {
             dist.sample()
         };
-        let prob = dist.liklihood(&_value).unwrap();            //Compute the probability of this value. 
-        trace.update_logscore(prob);                       //Update the log score with the pdf. 
-        trace.choices.add_choice(name.as_str(), _value);  //Add the choice to the hashmap.
+        let prob = dist.liklihood(&_value).unwrap();                    //Compute the probability of this value. 
+        trace.update_logscore(prob);                               //Update the log score with the pdf. 
+        trace.choices.add_choice(name.as_str(), _value.clone());  //Add the choice to the hashmap.
         _value 
     };
     let mut trace = Trace::new(); 
@@ -364,5 +379,3 @@ F : FnMut(Rc<dyn FnMut(&String, Distribution, &mut Trace) -> Value>, &mut Trace,
     let return_value = generative_function(Rc::new(sample), &mut trace, arguments);
     (trace, return_value)
 }
-    
-

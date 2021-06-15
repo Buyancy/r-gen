@@ -35,7 +35,7 @@ impl Choicemap {
     /// ```
     pub fn from(choices : Vec<(&str, Value)>) -> Choicemap {
         let mut res = Choicemap::new(); 
-        choices.iter().for_each(|(s, v)| res.add_choice(*s, *v)); 
+        choices.iter().for_each(|(s, v)| res.add_choice(*s, v.clone())); 
         res
     }
 
