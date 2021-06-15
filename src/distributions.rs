@@ -5,6 +5,12 @@ use std::{fmt, ops::{Add, Div, Mul, Sub}};
 use probability::prelude::*;
 use rand::{self, FromEntropy, prelude::ThreadRng, rngs::StdRng}; 
 use rand::distributions::Distribution as Distr;
+use statrs::function::gamma::gamma;
+
+#[cfg(test)]
+mod tests {
+
+}
 
 /**
 A value struct that will handle possible values from the distributions.
@@ -336,6 +342,7 @@ impl Sampleable for Distribution {
         }
     }
 
+    
     /**
     Compute the liklihood of a value given a distribution (returns the log liklihood.) 
     # Errors 
@@ -413,7 +420,7 @@ impl Sampleable for Distribution {
             Distribution::Dirichlet(a) => {
                 match value {
                     Value::Vector(x) => {
-                        let ba_numerator = a.iter().fold(1.0, |acc, x| acc * gamma(*x)); 
+                        let ba_numerator : f64 = a.iter().fold(1.0, |acc, x| acc * gamma(*x)); 
                         let ba_denominator : f64 = gamma(a.iter().sum());  
                         let ba = ba_numerator / ba_denominator; 
 
@@ -431,24 +438,4 @@ impl Sampleable for Distribution {
             }
         }
     }
-}
-
-//A helper method that computes the gamma function. 
-const TAYLOR_COEFFICIENTS: [f64; 29] = [
-    -0.00000000000000000023,  0.00000000000000000141,  0.00000000000000000119,
-    -0.00000000000000011813,  0.00000000000000122678, -0.00000000000000534812,
-    -0.00000000000002058326,  0.00000000000051003703, -0.00000000000369680562,
-     0.00000000000778226344,  0.00000000010434267117, -0.00000000118127457049,
-     0.00000000500200764447,  0.00000000611609510448, -0.00000020563384169776,
-     0.00000113302723198170, -0.00000125049348214267, -0.00002013485478078824,
-     0.00012805028238811619, -0.00021524167411495097, -0.00116516759185906511,
-     0.00721894324666309954, -0.00962197152787697356, -0.04219773455554433675,
-     0.16653861138229148950, -0.04200263503409523553, -0.65587807152025388108,
-     0.57721566490153286061,  1.00000000000000000000,
-];
-const INITIAL_SUM: f64 = 0.00000000000000000002;
-fn gamma(x: f64) -> f64 {
-    TAYLOR_COEFFICIENTS.iter().fold(INITIAL_SUM, |sum, coefficient| {
-        sum * (x - 1.0) + coefficient
-    }).recip()
 }

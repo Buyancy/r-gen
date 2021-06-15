@@ -3,6 +3,12 @@ name = "r-gen"
 version = "0.0.1"
 authors = ["Sean Moore <49214378+Hobbs1024@users.noreply.github.com>"]
 edition = "2018"
+lisence = "MIT"
+description = "A generative modeling framework."
+repository = "https://github.com/Buyancy/r-gen"
+readme = "README.md"
+keywords = ["generative modeling", "probaiblity", "statistics", "modeling"]
+categories = ["mathematics", "data-structures"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -12,4 +18,5 @@ proc-macro = false
 [dependencies]
 probability = "0.17.0"
 rand = {version = "0.6", features = ["std"]}
-r_gen_macro = { path = "r_gen_macro" }
+r_gen_macro = { version = "0.1.0", path = "r_gen_macro" }
+statrs = "0.13.0"

@@ -40,11 +40,14 @@ sample!(identifier ~ Distribution);
 This samples the `Distribution` given and stores the result in `identifier`. `Distribution` is defined as 
 ```rust
 pub enum Distribution {
-    Bernoulli(f64),     //p
-    Binomial(i64, f64), //n, p
-    Normal(f64, f64),   //mu, sigma squared
-    Gamma(f64, f64),    //alpha, beta
-    Beta(f64, f64)      //alpha, beta
+    Bernoulli(f64),         //p
+    Binomial(i64, f64),     //n, p
+    Normal(f64, f64),       //mu, sigma
+    Gamma(f64, f64),        //alpha, beta
+    Beta(f64, f64),         //alpha, beta
+    LogNormal(f64, f64),    //mu, sigma 
+    Categorical(Vec<f64>),  //p
+    Dirichlet(Vec<f64>),    //alpha
 }
 ```
 `Value` is defined as 
@@ -52,11 +55,12 @@ pub enum Distribution {
 pub enum Value {
     Boolean(bool), 
     Integer(i64), 
-    Real(f64)
+    Real(f64), 
+    Vector(Vec<Value>)
 }
 ```
 The variant of the enum that is returned from sampling depends on the distribution being sampled.
 
 ---
 
-This framework is in EARLY stages of development. It is not even on crates.io yet. Everything is subject to change. That said, contributions are welcome and you can feel free to use the code however you like. 
+This framework is in EARLY stages of development. Everything is subject to change.  
