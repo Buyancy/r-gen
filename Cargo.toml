@@ -18,5 +18,5 @@ proc-macro = false
 [dependencies]
 probability = "0.17.0"
 rand = {version = "0.6", features = ["std"]}
-r_gen_macro = { version = "0.1.0", path = "r_gen_macro" }
+r_gen_macro = { version = "^0", path = "r_gen_macro" }
 statrs = "0.13.0"
