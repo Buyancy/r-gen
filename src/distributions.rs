@@ -7,11 +7,6 @@ use rand::{self, FromEntropy, prelude::ThreadRng, rngs::StdRng};
 use rand::distributions::Distribution as Distr;
 use statrs::function::gamma::gamma;
 
-#[cfg(test)]
-mod tests {
-
-}
-
 /**
 A value struct that will handle possible values from the distributions.
 */ 
@@ -424,14 +419,14 @@ impl Sampleable for Distribution {
                         let ba_denominator : f64 = gamma(a.iter().sum());  
                         let ba = ba_numerator / ba_denominator; 
 
-                        Ok((1.0/ba) * x.iter().map(|x| {
+                        Ok(((1.0/ba) * x.iter().map(|x| {
                             match *x {
                                 Value::Real(x) => x, 
                                 _ => 1.0, 
                             }
                         }).zip(a.iter()).fold(1.0, |acc, (x, a)| {
                             acc * x.powf(a-1.0)
-                        }))
+                        })).ln())
                     }, 
                     _ => Err("Value of wrong type, expected Vector.")
                 }

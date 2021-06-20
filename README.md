@@ -1,15 +1,15 @@
 # r-gen
-A generative programming framework for the rust programming language. This is heavily based on the Gen library for the Julia programming language.
+A probabilistic programming framework for the rust programming language. This is heavily based on the Gen library for the Julia programming language.
 
-Example using importance resampling to estimate latent variables.
+Example using importance sampling to estimate latent variables.
 ```rust
 ...
 fn main() {
     //Define our generative model. 
     #[r_gen]
     fn my_model(():()){
-        sample!(p ~ Distribution::Beta(1.0, 1.0)); 
-        sample!(num_heads ~ Distribution::Binomial(100, p.into()));
+        let p = sample!(format!("p"), Distribution::Beta(1.0, 1.0)); 
+        sample!(format!("num_heads"), Distribution::Binomial(100, p.into()));
     }
 
     //Run the model once in the forward direction and record the observations. 
@@ -33,9 +33,9 @@ Actual value for p:      0.8011431168181488
 Generated value for p:   0.7879998086169554
 ```
 
-Note the `#[r_gen]` tag on the generative function. This must be on any of your generative functions in order to use `simulate` and `generate` on them. In order to make a random choice (sample from a distribution) you must use the `sample!()` macro. The syntax for this is 
+Note the `#[r_gen]` tag on the generative function. This must be on any of your generative functions in order to use `simulate` and `generate` on them. One other stipulation of a generative function is that it must have a single argument. This can be a tuple or `()` if you dont need to pass any arguments. In order to make a random choice (sample from a distribution) you must use the `sample!()` macro. The syntax for this is 
 ```rust
-sample!(identifier ~ Distribution); 
+sample!(identifier, Distribution); 
 ```
 This samples the `Distribution` given and stores the result in `identifier`. `Distribution` is defined as 
 ```rust

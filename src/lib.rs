@@ -9,8 +9,8 @@ fn main() {
     //Define our generative model. 
     #[r_gen]
     fn my_model(():()){
-        sample!(p ~ Distribution::Beta(1.0, 1.0)); 
-        sample!(num_heads ~ Distribution::Binomial(100, p.into()));
+        let p = sample!(format!("p"), Distribution::Beta(1.0, 1.0)); 
+        sample!(format!("num_heads"), Distribution::Binomial(100, p.into()));
     }
 
     //Run the model once in the forward direction and record the observations. 
@@ -55,15 +55,15 @@ use std::rc::Rc;
 
 #[r_gen]
 fn my_model(():()) {
-    sample!(p ~ Distribution::Bernoulli(0.5)); 
+    let p = sample!(format!("p"), Distribution::Bernoulli(0.5)); 
     print!("p: {}", p);
 }
 simulate(&mut my_model, ()); 
 ``` 
-Takes the form: identifier ~ Distribution. The identifier will have the value sampled from the distribution stored in
+Takes the form: identifier,  Distribution. The identifier will have the value sampled from the distribution stored in
 it. It can be used later. p will have type ```Value```.
 # Example (Store results in an array)
-```rust
+```
 use r_gen::{sample, r_gen}; 
 use r_gen::{simulate, distributions::{Value, Distribution}, trace::{Choicemap, Trace}}; 
 use std::rc::Rc;
@@ -72,7 +72,7 @@ use std::rc::Rc;
 fn flip_my_biased_coins((n, p) : (usize, f64)) {
     let mut flips = vec![Value::Integer(0); n]; 
     for i in 0..n {
-        sample!(flips => i ~ Distribution::Bernoulli(p)); 
+        flips[i] = sample!(format!("flip_{}", i), Distribution::Bernoulli(p)); 
     }
 }
 let (tr, _) = simulate(&mut flip_my_biased_coins, (10, 0.5));
@@ -81,27 +81,9 @@ println!("{}", tr.get_trace_string());
 */
 #[macro_export]
 macro_rules! sample {
-
-    ($sample_ident:ident $trace_ident:ident $name:ident ~ $dist:expr) => (
-        let $name = (Rc::get_mut(&mut $sample_ident).unwrap())(&String::from(stringify!($name)), $dist, $trace_ident);
+    ($sample_ident:ident $trace_ident:ident $name:expr, $dist:expr) => (
+        (Rc::get_mut(&mut $sample_ident).unwrap())(&$name, $dist, $trace_ident);
     );
-
-    ($sample_ident:ident $trace_ident:ident $name:ident => $i:ident ~ $dist:expr) => (
-        let mut s = String::from(stringify!($name));
-        s.push_str("[");
-        s.push_str(&$i.to_string());
-        s.push_str("]");
-        $name[$i] = (Rc::get_mut(&mut $sample_ident).unwrap())(&s, $dist, $trace_ident);
-    );
-
-    ($sample_ident:ident $trace_ident:ident $name:ident [ $i:ident ] ~ $dist:expr) => (
-        let mut s = String::from(stringify!($name));
-        s.push_str("[");
-        s.push_str(&$i.to_string());
-        s.push_str("]");
-        $name[$i] = (Rc::get_mut(&mut $sample_ident).unwrap())(&s, $dist, $trace_ident);
-    );
-
 }
 
 
@@ -117,14 +99,14 @@ mod tests {
     fn test_simulate(){
         fn flip_biased_coin(mut sample : Rc<dyn FnMut(&String, Distribution, &mut Trace) -> Value>, trace : &mut Trace, p : f64) {
             // flip ~ Bernoulli(p)
-            (Rc::get_mut(&mut sample).unwrap())(&String::from("flip"), Distribution::Bernoulli(p), trace);
+            let flip = (Rc::get_mut(&mut sample).unwrap())(&String::from("flip"), Distribution::Bernoulli(p), trace);
         }
         let (t, _) : (Trace, _)= simulate(&mut flip_biased_coin, 0.2); 
         println!("test_simulate flip_biased_coin trace: {:?}", t); 
 
         fn flip_multiple_biased_coins(mut sample : Rc<dyn FnMut(&String, Distribution, &mut Trace) -> Value>, trace : &mut Trace, (n, p) : (i64, f64)) {
             // heads ~ Bernoulli(p)
-            (Rc::get_mut(&mut sample).unwrap())(&String::from("heads"), Distribution::Binomial(n, p), trace);
+            let heads = (Rc::get_mut(&mut sample).unwrap())(&String::from("heads"), Distribution::Binomial(n, p), trace);
         }
         let (t, _) : (Trace, _)= simulate(&mut flip_multiple_biased_coins, (5, 0.7)); 
         println!("test_simulate flip_multiple_biased_coin trace: {:?}", t);
@@ -134,7 +116,7 @@ mod tests {
     fn test_generate(){
         #[r_gen]
         fn flip_multiple_biased_coins((n, p) : (i64, f64)) {
-            sample!(heads ~ Distribution::Binomial(n, p)); 
+            let heads = sample!(format!("heads"), Distribution::Binomial(n, p)); 
             println!("Result of flips: {:?}", heads)
         }
         let mut constraints = Choicemap::new(); 
@@ -147,7 +129,7 @@ mod tests {
     fn test_macros(){
         #[r_gen]
         fn my_coin_model(p : f64) {
-            sample!(flip ~ Distribution::Bernoulli(p)); 
+            let flip = sample!(format!("flip"), Distribution::Bernoulli(p)); 
             println!("Result of flip: {:?}", flip)
         }
         let (trace, _) = simulate(&mut my_coin_model, 0.2); 
@@ -156,7 +138,7 @@ mod tests {
 
         #[r_gen]
         fn flip_multiple_biased_coins((n, p) : (i64, f64)) {
-            sample!(heads ~ Distribution::Binomial(n, p)); 
+            let heads = sample!(format!("heads"), Distribution::Binomial(n, p)); 
             println!("Result of flips: {:?}", heads)
         }
         let (trace, _) : (Trace, _)= simulate(&mut flip_multiple_biased_coins, (5, 0.7)); 
@@ -166,7 +148,7 @@ mod tests {
         fn flip_my_biased_coin((n, p) : (usize, f64)) {
             let mut flips = vec![Value::Integer(0); n]; 
             for i in 0..n {
-                sample!(flips => i ~ Distribution::Bernoulli(p)); 
+                flips[i] = sample!(format!("flips_{}", i), Distribution::Bernoulli(p)); 
             }
         }
         let (trace, _) : (Trace, _)= simulate(&mut flip_my_biased_coin, (5 as usize, 0.7)); 
@@ -176,7 +158,7 @@ mod tests {
         fn flip_my_biased_coin2((n, p) : (usize, f64)) {
             let mut flips = vec![Value::Integer(0); n]; 
             for i in 0..n {
-                sample!(flips[i] ~ Distribution::Bernoulli(p)); 
+                flips[i] = sample!(format!("flips_{}", i), Distribution::Bernoulli(p)); 
             }
             println!("flips: {:?}", flips); 
         }
@@ -190,7 +172,7 @@ mod tests {
         fn my_bernoulli(p : f64) {
             let mut tests = vec![Value::Real(0.0); 100]; 
             for i in 0..100 {
-                sample!(tests[i] ~ Distribution::Bernoulli(p));
+                tests[i] = sample!(format!("tests_{}", i), Distribution::Bernoulli(p));
             }
             let mut tot : f64 = 0.0; 
             for t in tests {
@@ -212,7 +194,7 @@ mod tests {
         fn my_binomial((n, p): (i64, f64)) {
             let mut tests = vec![Value::Real(0.0); 100]; 
             for i in 0..100 {
-                sample!(tests[i] ~ Distribution::Binomial(n, p));
+                tests[i] = sample!(format!("tests_{}", i), Distribution::Binomial(n, p));
             }
             let mut tot : f64 = 0.0; 
             for t in tests {
@@ -234,7 +216,7 @@ mod tests {
         fn my_normal((m, s): (f64, f64)) {
             let mut tests = vec![Value::Real(0.0); 100]; 
             for i in 0..100 {
-                sample!(tests[i] ~ Distribution::Normal(m, s));
+                tests[i] = sample!(format!("tests_{}", i), Distribution::Normal(m, s));
             }
             let mut tot : f64 = 0.0; 
             for t in tests {
@@ -255,8 +237,8 @@ mod tests {
         //Define our generative model. 
         #[r_gen]
         fn my_model(():()){
-            sample!(p ~ Distribution::Beta(1.0, 1.0)); 
-            sample!(num_heads ~ Distribution::Binomial(100, p.into()));
+            let p = sample!(format!("p"), Distribution::Beta(1.0, 1.0)); 
+            sample!(format!("num_heads"), Distribution::Binomial(100, p.into()));
         }
 
         //Run the model once in the forward direction and record the observations. 
@@ -278,8 +260,8 @@ mod tests {
     fn test_trace_string(){
         #[r_gen]
         fn my_biased_coin_model(():()){
-            sample!(p ~ Distribution::Beta(1.0, 1.0));                    //Sample p from a uniform. 
-            sample!(num_heads ~ Distribution::Binomial(100, p.into()));   //Flip 100 coins where P(Heads)=p
+            let p = sample!(format!("p"), Distribution::Beta(1.0, 1.0));            //Sample p from a uniform. 
+            sample!(format!("num_heads"), Distribution::Binomial(100, p.into()));   //Flip 100 coins where P(Heads)=p
         }
         println!("GO"); 
         let (trace, result) = simulate(&mut my_biased_coin_model, ()); 
@@ -308,8 +290,8 @@ use r_gen::{simulate, distributions::{Value, Distribution}, trace::{Choicemap, T
 use std::rc::Rc;
 #[r_gen]
 fn my_biased_coin_model(():()){
-    sample!(p ~ Distribution::Beta(1.0, 1.0));                    //Sample p from a uniform. 
-    sample!(num_heads ~ Distribution::Binomial(100, p.into()));   //Flip 100 coins where P(Heads)=p
+    let p = sample!(format!("p"), Distribution::Beta(1.0, 1.0));            //Sample p from a uniform. 
+    sample!(format!("num_heads"), Distribution::Binomial(100, p.into()));   //Flip 100 coins where P(Heads)=p
 }
 println!("GO"); 
 let (trace, result) = simulate(&mut my_biased_coin_model, ()); 
@@ -349,8 +331,8 @@ use r_gen::{generate, distributions::{Value, Distribution}, trace::{Choicemap, T
 use std::rc::Rc;
 #[r_gen]
 fn my_biased_coin_model(():()){
-    sample!(p ~ Distribution::Beta(1.0, 1.0));                    //Sample p from a uniform. 
-    sample!(num_heads ~ Distribution::Binomial(100, p.into()));   //Flip 100 coins where P(Heads)=p
+    let p = sample!(format!("p"), Distribution::Beta(1.0, 1.0));            //Sample p from a uniform. 
+    sample!(format!("num_heads"), Distribution::Binomial(100, p.into()));   //Flip 100 coins where P(Heads)=p
 }
 let choices = Choicemap::from(vec![("p", Value::Real(0.1))]);     //Fix the value p=0.1
 let (trace, result) = generate(&mut my_biased_coin_model, (), &choices); 

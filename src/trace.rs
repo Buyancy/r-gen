@@ -91,7 +91,7 @@ The trace struct. This holds information about the execution of a gnerative mode
 pub struct Trace {
     /// The log joint liklihood of all of the random decisions in the trace. 
     pub log_score : f64, 
-    /// The Choicemap that holds the list of the actuial decisions that were made in the execution of the generative model.
+    /// The Choicemap that holds the list of the actual decisions that were made in the execution of the generative model.
     pub choices : Choicemap
 }
 
@@ -123,8 +123,8 @@ impl Trace {
 
     #[r_gen]
     fn my_biased_coin_model(():()){
-        sample!(p ~ Distribution::Beta(1.0, 1.0));                    //Sample p from a uniform. 
-        sample!(num_heads ~ Distribution::Binomial(100, p.into()));   //Flip 100 coins where P(Heads)=p
+        let p = sample!(format!("p"), Distribution::Beta(1.0, 1.0));            //Sample p from a uniform. 
+        sample!(format!("num_heads"), Distribution::Binomial(100, p.into()));   //Flip 100 coins where P(Heads)=p
     }
     let (trace, result) = simulate(&mut my_biased_coin_model, ()); 
     println!("{}", trace.get_trace_string()); 
